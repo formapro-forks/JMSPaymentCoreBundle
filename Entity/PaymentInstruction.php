@@ -35,7 +35,7 @@ class PaymentInstruction implements PaymentInstructionInterface
     protected $depositedAmount;
     protected $depositingAmount;
     protected $extendedData;
-    protected $extendedDataOriginal;
+    protected $extendedDataModified;
     protected $id;
     protected $payments;
     protected $paymentSystemName;
@@ -57,7 +57,8 @@ class PaymentInstruction implements PaymentInstructionInterface
         $this->currency = $currency;
         $this->depositingAmount = 0.0;
         $this->depositedAmount = 0.0;
-        $this->extendedData = $data;
+        $this->extendedData = clone $data;
+        $this->extendedDataModified = false;
         $this->payments = new ArrayCollection();
         $this->paymentSystemName = $paymentSystemName;
         $this->reversingApprovedAmount = 0.0;
@@ -117,6 +118,12 @@ class PaymentInstruction implements PaymentInstructionInterface
 
     public function getExtendedData()
     {
+        // if extended data requested from the outside it means that it may be changed so we changed the object to point doctrine to save the column
+        if (false == $this->extendedDataModified) {
+            $this->extendedData = clone $this->extendedData;
+            $this->extendedDataModified = true;
+        }
+
         return $this->extendedData;
     }
 
@@ -217,22 +224,16 @@ class PaymentInstruction implements PaymentInstructionInterface
         return null !== $this->getPendingTransaction();
     }
 
-    public function onPostLoad()
-    {
-        $this->extendedDataOriginal = clone $this->extendedData;
-    }
-
     public function onPrePersist()
     {
         if (null !== $this->id) {
             $this->updatedAt = new \Datetime;
         }
+    }
 
-        // this is necessary until Doctrine adds an interface for comparing
-        // value objects. Right now this is done by referential equality
-        if (null !== $this->extendedDataOriginal && false === $this->extendedData->equals($this->extendedDataOriginal)) {
-            $this->extendedData = clone $this->extendedData;
-        }
+    public function onPostSave()
+    {
+        $this->extendedDataModified = false;
     }
 
     public function setApprovingAmount($amount)
